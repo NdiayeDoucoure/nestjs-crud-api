@@ -2,18 +2,19 @@ import { Injectable } from '@nestjs/common';
 import { AuthBody } from './auth.controller';
 import { PrismaService } from 'src/prisma.service';
 import { hash, compare } from 'bcrypt';
+import { JwtService } from '@nestjs/jwt';
 @Injectable()
 export class AuthService {
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly jwtService: JwtService,
+  ) {}
   async login({ authBody }: { authBody: AuthBody }) {
     const { email, password } = authBody;
 
-    const hashPassword = await this.hashPassword(password);
-    console.log(hashPassword, password);
-
     const existUser = await this.prismaService.user.findUnique({
       where: {
-        email: authBody.email,
+        email,
       },
     });
     if (!existUser) {
@@ -28,7 +29,8 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new Error('Password is incorrect');
     }
-    return existUser;
+    return await this.authenticateUser(existUser.id.toString());
+    //const hashPassword = await this.hashPassword(password);
   }
 
   private async hashPassword(password: string) {
@@ -39,5 +41,12 @@ export class AuthService {
   private async isPasswordValid(password: string, hashedPassword: string) {
     const isPasswordValid = await compare(password, hashedPassword);
     return isPasswordValid;
+  }
+
+  private async authenticateUser(userId: string) {
+    const payload = { userId };
+    return {
+      access_token: await this.jwtService.signAsync(payload),
+    };
   }
 }
